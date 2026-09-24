@@ -2,6 +2,7 @@
 
 import React, { Component, ReactNode, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
+import * as THREE from 'three';
 import GalaxyScene from './GalaxyScene';
 
 interface ErrorBoundaryProps {
@@ -66,6 +67,8 @@ export default function GalaxyCanvas({ performanceMode = 'medium' }: GalaxyCanva
             antialias: performanceMode !== 'low',
             alpha: false,
             powerPreference: 'high-performance',
+            toneMapping: THREE.ACESFilmicToneMapping,
+            toneMappingExposure: 1.05,
           }}
           dpr={performanceMode === 'high' ? [1, 2] : [1, 1.5]}
         >

@@ -33,6 +33,9 @@ export default function ObjectInfoPanel() {
   const hasSystem = (selectedObj.type.includes('star') || selectedObj.id === 'sol') && systemsRecord[selectedObj.id];
 
   const handleFocus = () => {
+    if (selectedObj.type === 'planet' || selectedObj.type === 'moon') {
+      setViewLevel('system');
+    }
     focusObject(selectedObj.id);
     setNavigationStatus('navigating');
     setNavigationTarget(selectedObj.name);
@@ -228,6 +231,22 @@ export default function ObjectInfoPanel() {
               >
                 <Compass className="w-3.5 h-3.5" />
                 EXPLORE SYSTEM
+              </button>
+            )}
+
+            {(selectedObj.type === 'planet' || selectedObj.type === 'moon') && viewLevel !== 'system' && (
+              <button
+                onClick={() => {
+                  setViewLevel('system');
+                  focusObject(selectedObj.id);
+                  setNavigationStatus('entering-system');
+                  setNavigationTarget(selectedObj.name);
+                  setTimeout(() => setNavigationStatus('idle'), 2500);
+                }}
+                className="flex-1 bg-cyan-600/30 hover:bg-cyan-600/50 active:bg-cyan-600/60 text-cyan-300 border border-cyan-500/40 py-2.5 px-3 rounded-lg flex items-center justify-center gap-2 transition-colors text-xs font-mono tracking-wider shadow-[0_0_15px_rgba(6,182,212,0.15)]"
+              >
+                <Compass className="w-3.5 h-3.5" />
+                EXPLORE PLANET
               </button>
             )}
           </div>

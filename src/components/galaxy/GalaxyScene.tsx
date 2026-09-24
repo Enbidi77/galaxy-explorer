@@ -3,7 +3,7 @@
 import React, { useMemo } from 'react';
 import { useGalaxyStore } from '../../stores/galaxy-store';
 import { useSettingsStore } from '../../stores/settings-store';
-import { systemsRecord } from '../../lib/galaxy/systems';
+import { systemsRecord, solarSystemPlanets } from '../../lib/galaxy/systems';
 import StarField from './StarField';
 import Nebula from './Nebula';
 import InteractiveStar from './InteractiveStar';
@@ -33,7 +33,19 @@ export default function GalaxyScene({ performanceMode = 'medium' }: GalaxySceneP
     [celestialObjects]
   );
 
-  const focusedSystem = focusedObjectId ? systemsRecord[focusedObjectId] : null;
+  const focusedSystem = useMemo(() => {
+    if (viewLevel !== 'system') return null;
+    if (!focusedObjectId || focusedObjectId === 'sol') return systemsRecord['sol'];
+    if (systemsRecord[focusedObjectId]) return systemsRecord[focusedObjectId];
+    if (solarSystemPlanets.some((p) => p.id === focusedObjectId)) {
+      return systemsRecord['sol'];
+    }
+    const obj = celestialObjects.find((o) => o.id === focusedObjectId);
+    if (obj?.parentId && systemsRecord[obj.parentId]) {
+      return systemsRecord[obj.parentId];
+    }
+    return systemsRecord['sol'];
+  }, [viewLevel, focusedObjectId, celestialObjects]);
 
   return (
     <>

@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { CelestialObject } from '../../types/astronomy';
 import { useGalaxyStore } from '../../stores/galaxy-store';
 import { formatDistance } from '../../lib/utils';
+import BlackHole from './BlackHole';
 
 interface InteractiveStarProps {
   object: CelestialObject;
@@ -14,6 +15,14 @@ interface InteractiveStarProps {
 }
 
 export default function InteractiveStar({ object, showLabel = true }: InteractiveStarProps) {
+  if (object.type === 'black-hole') {
+    return <BlackHole object={object} />;
+  }
+
+  return <StandardInteractiveStar object={object} showLabel={showLabel} />;
+}
+
+function StandardInteractiveStar({ object, showLabel = true }: InteractiveStarProps) {
   const selectObject = useGalaxyStore((s) => s.selectObject);
   const selectedObjectId = useGalaxyStore((s) => s.selectedObjectId);
   const meshRef = useRef<THREE.Mesh>(null);
@@ -30,8 +39,9 @@ export default function InteractiveStar({ object, showLabel = true }: Interactiv
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
     const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-    gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.6)');
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    gradient.addColorStop(0.25, 'rgba(255, 240, 200, 0.4)');
+    gradient.addColorStop(0.7, 'rgba(255, 180, 50, 0.1)');
     gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, 64, 64);
@@ -41,13 +51,13 @@ export default function InteractiveStar({ object, showLabel = true }: Interactiv
   useFrame((state) => {
     const t = state.clock.elapsedTime;
     if (meshRef.current) {
-      const pulse = Math.sin(t * 2 + object.position[0]) * 0.08 + 1.0;
-      const scale = (hovered ? 1.4 : 1.0) * pulse;
+      const pulse = Math.sin(t * 1.5 + object.position[0]) * 0.04 + 1.0;
+      const scale = (hovered ? 1.25 : 1.0) * pulse;
       meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
     }
     if (glowRef.current) {
-      const pulse = Math.sin(t * 1.5) * 0.15 + 1.0;
-      const targetOpacity = hovered ? 0.7 : isSelected ? 0.6 : 0.4;
+      const pulse = Math.sin(t * 1.2) * 0.08 + 1.0;
+      const targetOpacity = hovered ? 0.35 : isSelected ? 0.3 : 0.18;
       glowRef.current.material.opacity = THREE.MathUtils.lerp(
         glowRef.current.material.opacity,
         targetOpacity * pulse,
@@ -57,10 +67,12 @@ export default function InteractiveStar({ object, showLabel = true }: Interactiv
   });
 
   const starColor = object.color || '#ffcc00';
+  // Controlled visual scale: prevent stars from clipping into giant flat discs
+  const visualSize = Math.min(object.size, 16);
 
   return (
     <group position={object.position}>
-      {/* Star mesh */}
+      {/* Star Photosphere */}
       <mesh
         ref={meshRef}
         onClick={(e) => {
@@ -77,25 +89,26 @@ export default function InteractiveStar({ object, showLabel = true }: Interactiv
           document.body.style.cursor = 'auto';
         }}
       >
-        <sphereGeometry args={[object.size, 32, 32]} />
+        <sphereGeometry args={[visualSize, 32, 32]} />
         <meshStandardMaterial
           color={starColor}
           emissive={starColor}
-          emissiveIntensity={hovered ? 2.5 : 1.5}
+          emissiveIntensity={hovered ? 1.4 : 0.95}
+          roughness={0.8}
         />
       </mesh>
 
-      {/* Glow sprite */}
+      {/* Subtle Stellar Corona Halo (calibrated scale and low opacity) */}
       {glowTexture && (
         <sprite
           ref={glowRef}
-          scale={[object.size * 5, object.size * 5, 1]}
+          scale={[visualSize * 2.6, visualSize * 2.6, 1]}
         >
           <spriteMaterial
             map={glowTexture}
             color={starColor}
             transparent
-            opacity={0.4}
+            opacity={0.18}
             blending={THREE.AdditiveBlending}
             depthWrite={false}
           />
@@ -105,21 +118,21 @@ export default function InteractiveStar({ object, showLabel = true }: Interactiv
       {/* Selection ring */}
       {isSelected && (
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[object.size * 2.2, object.size * 0.08, 16, 64]} />
-          <meshBasicMaterial color="#22d3ee" transparent opacity={0.6} />
+          <torusGeometry args={[visualSize * 1.6, visualSize * 0.04, 16, 64]} />
+          <meshBasicMaterial color="#22d3ee" transparent opacity={0.8} />
         </mesh>
       )}
 
-      {/* Label */}
+      {/* Astrometric Label */}
       {(showLabel || hovered || isSelected) && (hovered || isSelected) && (
         <Html
-          distanceFactor={100}
+          distanceFactor={90}
           center
-          position={[0, object.size * 2.5, 0]}
+          position={[0, visualSize * 1.8, 0]}
           style={{ pointerEvents: 'none' }}
         >
-          <div className="bg-black/80 backdrop-blur-sm text-white px-3 py-1.5 rounded text-xs whitespace-nowrap border border-white/20 select-none">
-            <div className="font-medium">{object.name}</div>
+          <div className="bg-slate-950/85 backdrop-blur-md text-white px-3 py-1.5 rounded-lg text-xs whitespace-nowrap border border-white/20 select-none shadow-xl font-mono">
+            <div className="font-medium text-cyan-300">{object.name}</div>
             <div className="text-white/50 text-[10px] uppercase tracking-wider">
               {object.type}
               {object.distance !== undefined && ` · ${formatDistance(object.distance)}`}

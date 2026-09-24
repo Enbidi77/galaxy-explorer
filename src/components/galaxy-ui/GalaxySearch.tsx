@@ -12,6 +12,7 @@ export default function GalaxySearch() {
     celestialObjects,
     selectObject,
     focusObject,
+    setViewLevel,
     setSearchQuery,
     searchQuery
   } = useGalaxyStore();
@@ -57,6 +58,10 @@ export default function GalaxySearch() {
   const handleSelect = (id: string) => {
     selectObject(id);
     focusObject(id);
+    const targetObj = celestialObjects.find((o) => o.id === id);
+    if (targetObj && (targetObj.type === 'planet' || targetObj.type === 'moon')) {
+      setViewLevel('system');
+    }
     setIsSearchOpen(false);
     setIsInfoPanelOpen(true);
   };

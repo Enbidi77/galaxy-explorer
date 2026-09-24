@@ -33,7 +33,7 @@ const defaultState = {
     showLabels: true,
     showOrbits: true,
     showGrid: false,
-    bloomIntensity: 1.5,
+    bloomIntensity: 0.7,
     exposure: 1.0,
     particleDensity: 1.0,
   },

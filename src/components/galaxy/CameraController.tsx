@@ -7,6 +7,7 @@ import gsap from 'gsap';
 import * as THREE from 'three';
 import { useGalaxyStore } from '../../stores/galaxy-store';
 import { useCameraStore } from '../../stores/camera-store';
+import { SOLAR_SYSTEM_PLANETS } from './planet/planet-data';
 
 const DEFAULT_POSITION: [number, number, number] = [0, 80, 180];
 const DEFAULT_TARGET: [number, number, number] = [0, 0, 0];
@@ -25,6 +26,7 @@ export default function CameraController() {
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls>>(null);
   
   const focusedObjectId = useGalaxyStore((s) => s.focusedObjectId);
+  const viewLevel = useGalaxyStore((s) => s.viewLevel);
   const celestialObjects = useGalaxyStore((s) => s.celestialObjects);
   const isCinematicMode = useGalaxyStore((s) => s.isCinematicMode);
   const isCinematicPaused = useGalaxyStore((s) => s.isCinematicPaused);
@@ -118,6 +120,61 @@ export default function CameraController() {
   useEffect(() => {
     if (!controlsRef.current || isCinematicMode) return;
 
+    if (viewLevel === 'system') {
+      if (!focusedObjectId || focusedObjectId === 'sol') {
+        // System overview centered on Sol
+        setIsAnimating(true);
+        setTargetPosition([0, 0, 0]);
+
+        gsap.to(camera.position, {
+          x: 0,
+          y: 45,
+          z: 95,
+          duration: 2.2,
+          ease: 'power2.inOut',
+          onComplete: () => setIsAnimating(false),
+        });
+
+        gsap.to(controlsRef.current.target, {
+          x: 0,
+          y: 0,
+          z: 0,
+          duration: 2.2,
+          ease: 'power2.inOut',
+        });
+      } else {
+        // Close-up framing on focused planet or moon
+        const planetDef = SOLAR_SYSTEM_PLANETS.find((p) => p.id === focusedObjectId);
+        const radius = planetDef?.orbitalRadius ?? 20;
+        const planetSize = planetDef?.radius ?? 1.0;
+        const tx = radius;
+        const ty = 0;
+        const tz = 0;
+        const camDistance = Math.max(planetSize * 3.6 + 1.2, 3.2);
+
+        setIsAnimating(true);
+        setTargetPosition([tx, ty, tz]);
+
+        gsap.to(camera.position, {
+          x: tx + camDistance * 0.7,
+          y: ty + camDistance * 0.35,
+          z: tz + camDistance * 0.8,
+          duration: 2.0,
+          ease: 'power2.inOut',
+          onComplete: () => setIsAnimating(false),
+        });
+
+        gsap.to(controlsRef.current.target, {
+          x: tx,
+          y: ty,
+          z: tz,
+          duration: 2.0,
+          ease: 'power2.inOut',
+        });
+      }
+      return;
+    }
+
     if (focusedObjectId) {
       const target = celestialObjects.find((o) => o.id === focusedObjectId);
       if (!target) return;
@@ -166,7 +223,7 @@ export default function CameraController() {
         ease: 'power2.inOut',
       });
     }
-  }, [focusedObjectId, celestialObjects, camera, setIsAnimating, setTargetPosition, isCinematicMode]);
+  }, [focusedObjectId, viewLevel, celestialObjects, camera, setIsAnimating, setTargetPosition, isCinematicMode]);
 
   // WASD camera movement
   useEffect(() => {
