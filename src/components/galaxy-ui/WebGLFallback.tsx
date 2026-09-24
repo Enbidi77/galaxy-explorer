@@ -14,7 +14,7 @@ export default function WebGLFallback() {
         <h2 className="text-2xl font-bold text-white mb-4">WebGL Not Supported</h2>
         
         <p className="text-white/60 mb-8 leading-relaxed">
-          Your browser or device doesn't support WebGL, which is required to render the 3D galaxy visualization.
+          Your browser or device doesn&apos;t support WebGL, which is required to render the 3D galaxy visualization.
         </p>
         
         <Button className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-white/10">

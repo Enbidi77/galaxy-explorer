@@ -1,46 +1,71 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Sphere, Html, Torus } from '@react-three/drei';
+import { Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { useGalaxyStore } from '@/stores/galaxyStore';
-import { SpecialStar } from '@/types/galaxy';
+import { CelestialObject } from '../../types/astronomy';
+import { useGalaxyStore } from '../../stores/galaxy-store';
+import { formatDistance } from '../../lib/utils';
 
 interface InteractiveStarProps {
-  star: SpecialStar;
+  object: CelestialObject;
+  showLabel?: boolean;
 }
 
-export default function InteractiveStar({ star }: InteractiveStarProps) {
+export default function InteractiveStar({ object, showLabel = true }: InteractiveStarProps) {
+  const selectObject = useGalaxyStore((s) => s.selectObject);
+  const selectedObjectId = useGalaxyStore((s) => s.selectedObjectId);
   const meshRef = useRef<THREE.Mesh>(null);
   const glowRef = useRef<THREE.Sprite>(null);
   const [hovered, setHovered] = useState(false);
-  const { selectedObjectId, setSelectedObject } = useGalaxyStore();
 
-  const isSelected = selectedObjectId === star.id;
+  const isSelected = selectedObjectId === object.id;
+
+  const glowTexture = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = 64;
+    canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.6)');
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 64, 64);
+    return new THREE.CanvasTexture(canvas);
+  }, []);
 
   useFrame((state) => {
-    const time = state.clock.elapsedTime;
+    const t = state.clock.elapsedTime;
     if (meshRef.current) {
-      const pulse = Math.sin(time * 3 + star.position[0]) * 0.1 + 1.0;
-      const targetScale = hovered ? 1.5 * pulse : 1.0 * pulse;
-      meshRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+      const pulse = Math.sin(t * 2 + object.position[0]) * 0.08 + 1.0;
+      const scale = (hovered ? 1.4 : 1.0) * pulse;
+      meshRef.current.scale.lerp(new THREE.Vector3(scale, scale, scale), 0.1);
     }
     if (glowRef.current) {
-      const pulse = Math.sin(time * 2) * 0.2 + 1.2;
-      const targetOpacity = hovered ? 0.8 : 0.5;
-      glowRef.current.material.opacity = THREE.MathUtils.lerp(glowRef.current.material.opacity, targetOpacity * pulse, 0.1);
+      const pulse = Math.sin(t * 1.5) * 0.15 + 1.0;
+      const targetOpacity = hovered ? 0.7 : isSelected ? 0.6 : 0.4;
+      glowRef.current.material.opacity = THREE.MathUtils.lerp(
+        glowRef.current.material.opacity,
+        targetOpacity * pulse,
+        0.1
+      );
     }
   });
 
+  const starColor = object.color || '#ffcc00';
+
   return (
-    <group position={star.position as [number, number, number]}>
-      <Sphere
+    <group position={object.position}>
+      {/* Star mesh */}
+      <mesh
         ref={meshRef}
-        args={[star.size, 32, 32]}
         onClick={(e) => {
           e.stopPropagation();
-          setSelectedObject(star.id);
+          selectObject(object.id);
         }}
         onPointerOver={(e) => {
           e.stopPropagation();
@@ -52,56 +77,56 @@ export default function InteractiveStar({ star }: InteractiveStarProps) {
           document.body.style.cursor = 'auto';
         }}
       >
-        <meshStandardMaterial 
-          color={star.color} 
-          emissive={star.color}
-          emissiveIntensity={hovered ? 2 : 1}
+        <sphereGeometry args={[object.size, 32, 32]} />
+        <meshStandardMaterial
+          color={starColor}
+          emissive={starColor}
+          emissiveIntensity={hovered ? 2.5 : 1.5}
         />
-      </Sphere>
+      </mesh>
 
-      <sprite ref={glowRef} scale={[star.size * 5, star.size * 5, 1]}>
-        <spriteMaterial 
-          color={star.color} 
-          transparent={true} 
-          opacity={0.5} 
-          blending={THREE.AdditiveBlending}
-          depthWrite={false}
-          map={createGlowTexture()}
-        />
-      </sprite>
-
-      {isSelected && (
-        <Torus args={[star.size * 2, star.size * 0.1, 16, 64]} rotation={[Math.PI / 2, 0, 0]}>
-          <meshBasicMaterial color="#ffffff" transparent opacity={0.5} />
-        </Torus>
+      {/* Glow sprite */}
+      {glowTexture && (
+        <sprite
+          ref={glowRef}
+          scale={[object.size * 5, object.size * 5, 1]}
+        >
+          <spriteMaterial
+            map={glowTexture}
+            color={starColor}
+            transparent
+            opacity={0.4}
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </sprite>
       )}
 
-      {(hovered || isSelected) && (
-        <Html distanceFactor={100} center position={[0, star.size * 2, 0]}>
-          <div className="bg-black/80 text-white px-2 py-1 rounded text-xs whitespace-nowrap border border-white/20 select-none pointer-events-none">
-            {star.name}
+      {/* Selection ring */}
+      {isSelected && (
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[object.size * 2.2, object.size * 0.08, 16, 64]} />
+          <meshBasicMaterial color="#22d3ee" transparent opacity={0.6} />
+        </mesh>
+      )}
+
+      {/* Label */}
+      {(showLabel || hovered || isSelected) && (hovered || isSelected) && (
+        <Html
+          distanceFactor={100}
+          center
+          position={[0, object.size * 2.5, 0]}
+          style={{ pointerEvents: 'none' }}
+        >
+          <div className="bg-black/80 backdrop-blur-sm text-white px-3 py-1.5 rounded text-xs whitespace-nowrap border border-white/20 select-none">
+            <div className="font-medium">{object.name}</div>
+            <div className="text-white/50 text-[10px] uppercase tracking-wider">
+              {object.type}
+              {object.distance !== undefined && ` · ${formatDistance(object.distance)}`}
+            </div>
           </div>
         </Html>
       )}
     </group>
   );
-}
-
-function createGlowTexture() {
-  if (typeof document === 'undefined') return null;
-  const canvas = document.createElement('canvas');
-  canvas.width = 64;
-  canvas.height = 64;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return null;
-  
-  const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
-  gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
-  gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
-  gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
-  
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, 64, 64);
-  
-  return new THREE.CanvasTexture(canvas);
 }

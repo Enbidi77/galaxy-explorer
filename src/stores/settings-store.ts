@@ -46,7 +46,7 @@ const defaultState = {
   },
   performanceMode: 'auto' as PerformanceMode,
   theme: 'deep-space' as ThemeMode,
-  soundEnabled: true,
+  soundEnabled: false,
 };
 
 export const useSettingsStore = create<SettingsState>()(

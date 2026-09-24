@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-type NavigationStatus = 'idle' | 'navigating' | 'entering-system' | 'returning';
+type NavigationStatus = 'idle' | 'navigating' | 'entering-system' | 'returning' | 'arrived';
 
 interface UIState {
   isSearchOpen: boolean;

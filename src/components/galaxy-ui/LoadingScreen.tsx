@@ -1,49 +1,70 @@
-"use client"
+'use client';
 
-import { motion } from "framer-motion"
-import { Sparkles } from "lucide-react"
+import React, { useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 
-export default function LoadingScreen({ progress = 45, status = "LOADING SECTOR DATA..." }) {
+const LOADING_STEPS = [
+  { threshold: 0, text: 'Initializing spatial renderer...' },
+  { threshold: 15, text: 'Generating star field...' },
+  { threshold: 35, text: 'Computing spiral arms...' },
+  { threshold: 55, text: 'Loading celestial objects...' },
+  { threshold: 72, text: 'Calibrating navigation...' },
+  { threshold: 88, text: 'Preparing visualization...' },
+  { threshold: 100, text: 'Ready' },
+];
+
+interface LoadingScreenProps {
+  progress: number;
+}
+
+export default function LoadingScreen({ progress }: LoadingScreenProps) {
+  const currentStep = useMemo(() => {
+    for (let i = LOADING_STEPS.length - 1; i >= 0; i--) {
+      if (progress >= LOADING_STEPS[i].threshold) {
+        return LOADING_STEPS[i].text;
+      }
+    }
+    return LOADING_STEPS[0].text;
+  }, [progress]);
+
   return (
-    <motion.div 
-      initial={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="fixed inset-0 z-[100] bg-slate-950 flex flex-col items-center justify-center overflow-hidden"
-    >
-      <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-20">
-         {/* Simple static stars for loading screen */}
-         <div className="absolute top-1/4 left-1/4 w-1 h-1 bg-white rounded-full" />
-         <div className="absolute top-3/4 left-2/3 w-1 h-1 bg-white rounded-full" />
-         <div className="absolute top-1/2 left-4/5 w-1 h-1 bg-white rounded-full" />
-      </div>
+    <AnimatePresence>
+      {progress < 100 && (
+        <motion.div
+          initial={{ opacity: 1 }}
+          exit={{ opacity: 0, transition: { duration: 0.8, ease: 'easeInOut' } }}
+          className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-[#000005]"
+        >
+          <div className="w-72 flex flex-col items-center">
+            {/* Spinning ring */}
+            <div className="relative w-16 h-16 mb-8">
+              <div className="absolute inset-0 rounded-full border border-white/5" />
+              <div className="absolute inset-0 rounded-full border-t-2 border-cyan-400 animate-spin" />
+            </div>
 
-      <motion.div 
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{ duration: 1 }}
-        className="flex flex-col items-center z-10"
-      >
-        <div className="p-4 bg-cyan-950/30 rounded-2xl border border-cyan-500/20 mb-8">
-          <Sparkles className="w-12 h-12 text-cyan-400" />
-        </div>
-        
-        <h1 className="text-3xl md:text-5xl font-bold text-white tracking-[0.2em] mb-4 text-center">
-          INITIALIZING <span className="text-cyan-400">GALAXY</span>
-        </h1>
-        
-        <div className="w-64 md:w-96 h-1 bg-white/10 rounded-full overflow-hidden mb-4">
-          <motion.div 
-            className="h-full bg-cyan-400"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ ease: "linear" }}
-          />
-        </div>
-        
-        <p className="text-cyan-400/60 font-mono text-sm tracking-wider">
-          {status} {progress}%
-        </p>
-      </motion.div>
-    </motion.div>
-  )
+            <h2 className="text-white/90 tracking-[0.3em] font-light text-sm mb-1">
+              INITIALIZING GALAXY
+            </h2>
+            <p className="text-white/30 text-xs font-mono mb-6">{currentStep}</p>
+
+            {/* Progress bar */}
+            <div className="w-full h-[2px] bg-white/10 rounded-full overflow-hidden mb-2">
+              <motion.div
+                className="h-full bg-gradient-to-r from-cyan-400 to-blue-500"
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ ease: 'easeOut', duration: 0.3 }}
+              />
+            </div>
+
+            <div className="w-full text-right">
+              <span className="text-white/40 text-xs font-mono">
+                {Math.round(progress)}%
+              </span>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 }

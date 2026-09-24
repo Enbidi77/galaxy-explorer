@@ -10,11 +10,15 @@ interface GalaxyState {
   celestialObjects: CelestialObject[];
   filteredObjects: CelestialObject[];
   isCinematicMode: boolean;
+  isCinematicPaused: boolean;
+  currentTourStop: string;
   
   selectObject: (id: string | null) => void;
   focusObject: (id: string | null) => void;
   setSearchQuery: (query: string) => void;
   setCinematicMode: (isCinematic: boolean) => void;
+  setCinematicPaused: (paused: boolean) => void;
+  setCurrentTourStop: (stop: string) => void;
   setViewLevel: (level: ViewLevel) => void;
   setCelestialObjects: (objects: CelestialObject[]) => void;
 }
@@ -27,6 +31,8 @@ export const useGalaxyStore = create<GalaxyState>((set, get) => ({
   celestialObjects: celestialObjects,
   filteredObjects: celestialObjects,
   isCinematicMode: false,
+  isCinematicPaused: false,
+  currentTourStop: 'Galaxy Core',
 
   selectObject: (id) => set({ selectedObjectId: id }),
   focusObject: (id) => set({ focusedObjectId: id }),
@@ -44,6 +50,8 @@ export const useGalaxyStore = create<GalaxyState>((set, get) => ({
     set({ searchQuery: query, filteredObjects: filtered });
   },
   setCinematicMode: (isCinematicMode) => set({ isCinematicMode }),
+  setCinematicPaused: (isCinematicPaused) => set({ isCinematicPaused }),
+  setCurrentTourStop: (currentTourStop) => set({ currentTourStop }),
   setViewLevel: (viewLevel) => set({ viewLevel }),
   setCelestialObjects: (objects) => set({ celestialObjects: objects, filteredObjects: objects }),
 }));

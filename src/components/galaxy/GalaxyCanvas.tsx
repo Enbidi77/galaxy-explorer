@@ -1,22 +1,55 @@
 'use client';
 
-import React, { Suspense } from 'react';
+import React, { Component, ReactNode, Suspense } from 'react';
 import { Canvas } from '@react-three/fiber';
-import dynamic from 'next/dynamic';
-import { ErrorBoundary } from 'react-error-boundary';
+import GalaxyScene from './GalaxyScene';
 
-// Dynamic import for the 3D scene to prevent SSR issues with WebGL
-const GalaxyScene = dynamic(() => import('./GalaxyScene'), { ssr: false });
+interface ErrorBoundaryProps {
+  children: ReactNode;
+}
 
-function ErrorFallback({ error }: { error: Error }) {
-  return (
-    <div className="absolute inset-0 flex items-center justify-center bg-black text-white">
-      <div className="text-center p-8 bg-red-900/30 rounded-lg border border-red-500/50">
-        <h2 className="text-xl font-bold mb-2 text-red-400">WebGL Render Error</h2>
-        <p className="text-sm opacity-80">{error.message}</p>
-      </div>
-    </div>
-  );
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+class WebGLErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('WebGL Canvas Error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-black text-white">
+          <div className="text-center p-8 max-w-md">
+            <h2 className="text-xl font-semibold mb-3 text-red-400">
+              3D RENDERING ERROR
+            </h2>
+            <p className="text-sm text-white/60 mb-4">
+              {this.state.error?.message || 'An error occurred while rendering the galaxy.'}
+            </p>
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="px-4 py-2 text-sm bg-white/10 border border-white/20 rounded hover:bg-white/20 transition-colors"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 interface GalaxyCanvasProps {
@@ -25,23 +58,22 @@ interface GalaxyCanvasProps {
 
 export default function GalaxyCanvas({ performanceMode = 'medium' }: GalaxyCanvasProps) {
   return (
-    <div className="fixed inset-0 w-screen h-screen bg-black overflow-hidden select-none">
-      <ErrorBoundary FallbackComponent={ErrorFallback}>
+    <div className="fixed inset-0 w-screen h-screen bg-[#000005]">
+      <WebGLErrorBoundary>
         <Canvas
-          camera={{ fov: 60, near: 0.1, far: 10000, position: [0, 100, 200] }}
+          camera={{ position: [0, 80, 180], fov: 60, near: 0.1, far: 10000 }}
           gl={{
             antialias: performanceMode !== 'low',
-            toneMapping: 1, // THREE.NoToneMapping
-            powerPreference: 'high-performance',
             alpha: false,
+            powerPreference: 'high-performance',
           }}
-          dpr={performanceMode === 'high' ? [1, 2] : 1}
+          dpr={performanceMode === 'high' ? [1, 2] : [1, 1.5]}
         >
           <Suspense fallback={null}>
             <GalaxyScene performanceMode={performanceMode} />
           </Suspense>
         </Canvas>
-      </ErrorBoundary>
+      </WebGLErrorBoundary>
     </div>
   );
 }

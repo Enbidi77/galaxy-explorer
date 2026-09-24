@@ -1,69 +1,65 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useCallback, Suspense } from "react";
+import dynamic from "next/dynamic";
+import { isWebGLAvailable } from "@/lib/utils";
+import LandingHero from "@/components/galaxy-ui/LandingHero";
+import LoadingScreen from "@/components/galaxy-ui/LoadingScreen";
+import WebGLFallback from "@/components/galaxy-ui/WebGLFallback";
+
+const GalaxyExplorer = dynamic(() => import("@/components/GalaxyExplorer"), {
+  ssr: false,
+  loading: () => null,
+});
+
+type AppPhase = "landing" | "loading" | "exploring";
+
+export default function HomePage() {
+  const [phase, setPhase] = useState<AppPhase>("landing");
+  const [loadingProgress, setLoadingProgress] = useState(0);
+  const [webglAvailable] = useState(() =>
+    typeof window === "undefined" ? true : isWebGLAvailable()
+  );
+
+  const handleEnter = useCallback(() => {
+    setPhase("loading");
+
+    // Real-feeling calibration progress steps
+    const steps = [
+      { progress: 18, delay: 250 },
+      { progress: 42, delay: 450 },
+      { progress: 68, delay: 400 },
+      { progress: 85, delay: 350 },
+      { progress: 100, delay: 300 },
+    ];
+
+    let totalDelay = 0;
+    steps.forEach(({ progress, delay }) => {
+      totalDelay += delay;
+      setTimeout(() => setLoadingProgress(progress), totalDelay);
+    });
+
+    setTimeout(() => setPhase("exploring"), totalDelay + 400);
+  }, []);
+
+  if (!webglAvailable) {
+    return <WebGLFallback />;
+  }
+
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
-          </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <main className="h-full w-full relative overflow-hidden bg-[#000005]">
+      {/* 3D Canvas always renders behind everything for depth and smooth transition */}
+      <Suspense fallback={null}>
+        <GalaxyExplorer isActive={phase === "exploring"} />
+      </Suspense>
+
+      {/* Landing overlay */}
+      {phase === "landing" && <LandingHero onEnter={handleEnter} />}
+
+      {/* Loading calibration overlay */}
+      {phase === "loading" && (
+        <LoadingScreen progress={loadingProgress} />
+      )}
+    </main>
   );
 }

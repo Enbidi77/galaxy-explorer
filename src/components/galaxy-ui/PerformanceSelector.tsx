@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { cn } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 
 const modes = ["AUTO", "HIGH", "BALANCED", "LOW"]
 
