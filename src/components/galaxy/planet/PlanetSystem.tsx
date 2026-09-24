@@ -8,6 +8,7 @@ import { useGalaxyStore } from '@/stores/galaxy-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { SOLAR_SYSTEM_PLANETS, PlanetDefinition } from './planet-data';
 import Planet from './Planet';
+import { movingObjectRegistry } from '@/lib/galaxy/focus-registry';
 
 interface PlanetSystemProps {
   system?: unknown; // Keeps backwards compatibility with earlier props
@@ -21,6 +22,17 @@ export default function PlanetSystem({}: PlanetSystemProps) {
   const showLabels = useSettingsStore((s) => s.visualizationSettings.showLabels);
   const animSpeed = useSettingsStore((s) => s.animationSettings.speed);
   const performanceMode = useSettingsStore((s) => s.performanceMode);
+
+  const solAnchorRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    if (solAnchorRef.current) {
+      movingObjectRegistry.register('sol', solAnchorRef.current);
+    }
+    return () => {
+      movingObjectRegistry.unregister('sol');
+    };
+  }, []);
 
   // Quality profile for LOD
   const quality = useMemo(() => {
@@ -50,7 +62,7 @@ export default function PlanetSystem({}: PlanetSystemProps) {
     <group>
       {/* ================= SUN (SOL) ================= */}
       {/* Central star as a calibrated light source (not an overblown flat disc) */}
-      <group position={sunPosition}>
+      <group ref={solAnchorRef} position={sunPosition}>
         <mesh
           onClick={(e) => {
             e.stopPropagation();
@@ -155,6 +167,28 @@ function PlanetOrbit({
 }: PlanetOrbitProps) {
   const orbitGroupRef = useRef<THREE.Group>(null);
   const moonOrbitGroupRef = useRef<THREE.Group>(null);
+  const planetAnchorRef = useRef<THREE.Group>(null);
+  const moonAnchorRef = useRef<THREE.Group>(null);
+
+  useEffect(() => {
+    if (planetAnchorRef.current) {
+      movingObjectRegistry.register(planet.id, planetAnchorRef.current);
+    }
+    return () => {
+      movingObjectRegistry.unregister(planet.id);
+    };
+  }, [planet.id]);
+
+  useEffect(() => {
+    if (moon && moonAnchorRef.current) {
+      movingObjectRegistry.register(moon.id, moonAnchorRef.current);
+    }
+    return () => {
+      if (moon) {
+        movingObjectRegistry.unregister(moon.id);
+      }
+    };
+  }, [moon]);
 
   const radius = planet.orbitalRadius;
   // Physically proportional orbital angular velocity (Kepler: T^2 = a^3)
@@ -188,7 +222,7 @@ function PlanetOrbit({
 
       {/* Orbiting Plane */}
       <group ref={orbitGroupRef}>
-        <group position={[radius, 0, 0]}>
+        <group ref={planetAnchorRef} position={[radius, 0, 0]}>
           {/* Main Planet Renderer */}
           <Planet
             planet={planet}
@@ -202,7 +236,7 @@ function PlanetOrbit({
           {/* Moon System (Earth's Luna) */}
           {moon && (
             <group ref={moonOrbitGroupRef}>
-              <group position={[moon.orbitalRadius, 0, 0]}>
+              <group ref={moonAnchorRef} position={[moon.orbitalRadius, 0, 0]}>
                 <Planet
                   planet={moon}
                   radius={moon.radius}

@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
-import { useThree } from '@react-three/fiber';
+import { useEffect, useRef, useCallback } from 'react';
+import { useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import gsap from 'gsap';
 import * as THREE from 'three';
 import { useGalaxyStore } from '../../stores/galaxy-store';
 import { useCameraStore } from '../../stores/camera-store';
 import { SOLAR_SYSTEM_PLANETS } from './planet/planet-data';
+import { movingObjectRegistry } from '@/lib/galaxy/focus-registry';
 
 const DEFAULT_POSITION: [number, number, number] = [0, 80, 180];
 const DEFAULT_TARGET: [number, number, number] = [0, 0, 0];
@@ -24,7 +25,7 @@ const TOUR_STOPS = [
 export default function CameraController() {
   const { camera } = useThree();
   const controlsRef = useRef<React.ComponentRef<typeof OrbitControls>>(null);
-  
+
   const focusedObjectId = useGalaxyStore((s) => s.focusedObjectId);
   const viewLevel = useGalaxyStore((s) => s.viewLevel);
   const celestialObjects = useGalaxyStore((s) => s.celestialObjects);
@@ -36,6 +37,56 @@ export default function CameraController() {
   const setTargetPosition = useCameraStore((s) => s.setTargetPosition);
 
   const cinematicTimelineRef = useRef<gsap.core.Timeline | null>(null);
+
+  // Moving object focus & real-time tracking references
+  const trackingTargetId = useRef<string | null>(null);
+  const isTransitioning = useRef(false);
+  const transitionProgress = useRef(0);
+  const transitionDuration = useRef(2.0);
+
+  const startCamPos = useRef(new THREE.Vector3());
+  const startControlsTarget = useRef(new THREE.Vector3());
+  const prevTargetPos = useRef(new THREE.Vector3());
+  const currentTargetPos = useRef(new THREE.Vector3());
+  const targetOffset = useRef(new THREE.Vector3(0, 0, 0));
+
+  // Resolves the current real-time world position of any celestial target
+  const getTargetPosition = useCallback(
+    (id: string | null, out: THREE.Vector3): boolean => {
+      if (!id) return false;
+
+      // 1. Check real-time moving body registry (planets revolving in Keplerian orbits, moons)
+      if (movingObjectRegistry.has(id)) {
+        movingObjectRegistry.getWorldPosition(id, out);
+        return true;
+      }
+
+      // 2. Solar system center in system view
+      if (id === 'sol' && viewLevel === 'system') {
+        out.set(0, 0, 0);
+        return true;
+      }
+
+      // 3. Fallback for solar system planets if not yet mounted
+      if (viewLevel === 'system') {
+        const pDef = SOLAR_SYSTEM_PLANETS.find((p) => p.id === id);
+        if (pDef) {
+          out.set(pDef.orbitalRadius, 0, 0);
+          return true;
+        }
+      }
+
+      // 4. Galaxy celestial objects
+      const obj = celestialObjects.find((o) => o.id === id);
+      if (obj) {
+        out.set(...obj.position);
+        return true;
+      }
+
+      return false;
+    },
+    [viewLevel, celestialObjects]
+  );
 
   // Cinematic Tour Animation
   useEffect(() => {
@@ -52,7 +103,7 @@ export default function CameraController() {
           if (controlsRef.current) {
             controlsRef.current.update();
           }
-        }
+        },
       });
 
       TOUR_STOPS.forEach((stop, index) => {
@@ -60,7 +111,7 @@ export default function CameraController() {
           {},
           {
             duration: 0.1,
-            onStart: () => setCurrentTourStop(stop.name)
+            onStart: () => setCurrentTourStop(stop.name),
           }
         );
 
@@ -106,7 +157,7 @@ export default function CameraController() {
     }
   }, [isCinematicMode, camera, setCurrentTourStop]);
 
-  // Handle Pause / Resume
+  // Handle Cinematic Tour Pause / Resume
   useEffect(() => {
     if (!cinematicTimelineRef.current) return;
     if (isCinematicPaused) {
@@ -116,116 +167,137 @@ export default function CameraController() {
     }
   }, [isCinematicPaused]);
 
-  // Regular Focus Mode Animation (when not in cinematic tour)
+  // Setup Smooth Focus Approach on target change
   useEffect(() => {
-    if (!controlsRef.current || isCinematicMode) return;
-
-    if (viewLevel === 'system') {
-      if (!focusedObjectId || focusedObjectId === 'sol') {
-        // System overview centered on Sol
-        setIsAnimating(true);
-        setTargetPosition([0, 0, 0]);
-
-        gsap.to(camera.position, {
-          x: 0,
-          y: 45,
-          z: 95,
-          duration: 2.2,
-          ease: 'power2.inOut',
-          onComplete: () => setIsAnimating(false),
-        });
-
-        gsap.to(controlsRef.current.target, {
-          x: 0,
-          y: 0,
-          z: 0,
-          duration: 2.2,
-          ease: 'power2.inOut',
-        });
-      } else {
-        // Close-up framing on focused planet or moon
-        const planetDef = SOLAR_SYSTEM_PLANETS.find((p) => p.id === focusedObjectId);
-        const radius = planetDef?.orbitalRadius ?? 20;
-        const planetSize = planetDef?.radius ?? 1.0;
-        const tx = radius;
-        const ty = 0;
-        const tz = 0;
-        const camDistance = Math.max(planetSize * 3.6 + 1.2, 3.2);
-
-        setIsAnimating(true);
-        setTargetPosition([tx, ty, tz]);
-
-        gsap.to(camera.position, {
-          x: tx + camDistance * 0.7,
-          y: ty + camDistance * 0.35,
-          z: tz + camDistance * 0.8,
-          duration: 2.0,
-          ease: 'power2.inOut',
-          onComplete: () => setIsAnimating(false),
-        });
-
-        gsap.to(controlsRef.current.target, {
-          x: tx,
-          y: ty,
-          z: tz,
-          duration: 2.0,
-          ease: 'power2.inOut',
-        });
-      }
-      return;
-    }
+    if (isCinematicMode || !controlsRef.current) return;
 
     if (focusedObjectId) {
-      const target = celestialObjects.find((o) => o.id === focusedObjectId);
-      if (!target) return;
-
-      const [tx, ty, tz] = target.position;
-      const offsetDist = Math.max(target.size * 8, 20);
-
+      trackingTargetId.current = focusedObjectId;
+      isTransitioning.current = true;
+      transitionProgress.current = 0;
+      transitionDuration.current = 2.0;
       setIsAnimating(true);
-      setTargetPosition([tx, ty, tz]);
 
-      gsap.to(camera.position, {
-        x: tx + offsetDist * 0.5,
-        y: ty + offsetDist * 0.3,
-        z: tz + offsetDist,
-        duration: 2.5,
-        ease: 'power2.inOut',
-        onComplete: () => setIsAnimating(false),
-      });
+      startCamPos.current.copy(camera.position);
+      startControlsTarget.current.copy(controlsRef.current.target);
 
-      gsap.to(controlsRef.current.target, {
-        x: tx,
-        y: ty,
-        z: tz,
-        duration: 2.5,
-        ease: 'power2.inOut',
-      });
+      // Determine framing distance and cinematic view angle based on body type
+      if (viewLevel === 'system') {
+        if (focusedObjectId === 'sol') {
+          targetOffset.current.set(0, 35, 75);
+        } else {
+          const planetDef = SOLAR_SYSTEM_PLANETS.find((p) => p.id === focusedObjectId);
+          const planetRadius = planetDef?.radius ?? 1.0;
+          const camDistance = Math.max(planetRadius * 3.6 + 1.2, 3.2);
+
+          // 3/4 sun-lit viewpoint reveals terminator relief and atmosphere glow
+          targetOffset.current.set(camDistance * 0.7, camDistance * 0.35, camDistance * 0.8);
+        }
+      } else {
+        const obj = celestialObjects.find((o) => o.id === focusedObjectId);
+        const size = obj?.size ?? 5.0;
+        const camDistance = Math.max(size * 7.5, 20);
+        targetOffset.current.set(camDistance * 0.5, camDistance * 0.3, camDistance);
+      }
+
+      const temp = new THREE.Vector3();
+      if (getTargetPosition(focusedObjectId, temp)) {
+        prevTargetPos.current.copy(temp);
+        setTargetPosition([temp.x, temp.y, temp.z]);
+      }
     } else {
-      // Reset to default view
+      // Transition back to default overview
+      trackingTargetId.current = null;
+      isTransitioning.current = true;
+      transitionProgress.current = 0;
+      transitionDuration.current = 1.8;
       setIsAnimating(true);
       setTargetPosition(null);
 
-      gsap.to(camera.position, {
-        x: DEFAULT_POSITION[0],
-        y: DEFAULT_POSITION[1],
-        z: DEFAULT_POSITION[2],
-        duration: 2,
-        ease: 'power2.inOut',
-        onComplete: () => setIsAnimating(false),
-      });
+      startCamPos.current.copy(camera.position);
+      startControlsTarget.current.copy(controlsRef.current.target);
 
-      gsap.to(controlsRef.current.target, {
-        x: DEFAULT_TARGET[0],
-        y: DEFAULT_TARGET[1],
-        z: DEFAULT_TARGET[2],
-        duration: 2,
-        ease: 'power2.inOut',
-      });
+      if (viewLevel === 'system') {
+        targetOffset.current.set(0, 45, 95);
+        prevTargetPos.current.set(0, 0, 0);
+      } else {
+        targetOffset.current.set(...DEFAULT_POSITION);
+        prevTargetPos.current.set(...DEFAULT_TARGET);
+      }
     }
-  }, [focusedObjectId, viewLevel, celestialObjects, camera, setIsAnimating, setTargetPosition, isCinematicMode]);
+  }, [
+    focusedObjectId,
+    viewLevel,
+    isCinematicMode,
+    camera,
+    celestialObjects,
+    getTargetPosition,
+    setIsAnimating,
+    setTargetPosition,
+  ]);
 
-  // WASD camera movement
+  // Real-time tracking loop (executed each frame outside React render)
+  useFrame((_, delta) => {
+    if (isCinematicMode || !controlsRef.current) return;
+
+    const id = trackingTargetId.current;
+
+    // 1. Moving or static object active tracking
+    if (id) {
+      const hasPos = getTargetPosition(id, currentTargetPos.current);
+      if (!hasPos) return;
+
+      if (isTransitioning.current) {
+        // Smooth cubic ease-in-out approach to moving target
+        transitionProgress.current += delta / transitionDuration.current;
+        const rawT = Math.min(transitionProgress.current, 1);
+        const t = rawT < 0.5 ? 4 * rawT * rawT * rawT : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+        const desiredCamPos = currentTargetPos.current.clone().add(targetOffset.current);
+
+        controlsRef.current.target.lerpVectors(startControlsTarget.current, currentTargetPos.current, t);
+        camera.position.lerpVectors(startCamPos.current, desiredCamPos, t);
+        controlsRef.current.update();
+
+        prevTargetPos.current.copy(currentTargetPos.current);
+
+        if (rawT >= 1) {
+          isTransitioning.current = false;
+          setIsAnimating(false);
+        }
+      } else {
+        // Continuous Real-Time Tracking Lock on Moving Planet / Moon:
+        // Compute delta vector of planet's movement since previous frame
+        const deltaMove = currentTargetPos.current.clone().sub(prevTargetPos.current);
+
+        // Displace camera by the exact displacement of the planet
+        camera.position.add(deltaMove);
+        controlsRef.current.target.copy(currentTargetPos.current);
+        controlsRef.current.update();
+
+        prevTargetPos.current.copy(currentTargetPos.current);
+      }
+    } else if (isTransitioning.current) {
+      // Transitioning back to default overview
+      transitionProgress.current += delta / transitionDuration.current;
+      const rawT = Math.min(transitionProgress.current, 1);
+      const t = rawT < 0.5 ? 4 * rawT * rawT * rawT : 1 - Math.pow(-2 * rawT + 2, 3) / 2;
+
+      const destTarget = viewLevel === 'system' ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(...DEFAULT_TARGET);
+      const destCam = viewLevel === 'system' ? new THREE.Vector3(0, 45, 95) : new THREE.Vector3(...DEFAULT_POSITION);
+
+      controlsRef.current.target.lerpVectors(startControlsTarget.current, destTarget, t);
+      camera.position.lerpVectors(startCamPos.current, destCam, t);
+      controlsRef.current.update();
+
+      if (rawT >= 1) {
+        isTransitioning.current = false;
+        setIsAnimating(false);
+      }
+    }
+  });
+
+  // WASD camera movement (manual flight cancels focus lock)
   useEffect(() => {
     const keys = new Set<string>();
 
@@ -233,6 +305,13 @@ export default function CameraController() {
       const target = e.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
       keys.add(e.key.toLowerCase());
+
+      // If user uses manual navigation keys, release active focus lock
+      if (['w', 'a', 's', 'd', 'q', 'e'].includes(e.key.toLowerCase())) {
+        if (useGalaxyStore.getState().focusedObjectId) {
+          useGalaxyStore.getState().focusObject(null);
+        }
+      }
     };
 
     const handleKeyUp = (e: KeyboardEvent) => {
